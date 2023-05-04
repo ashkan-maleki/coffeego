@@ -1,6 +1,7 @@
 package purchase
 
 import (
+	"context"
 	"errors"
 	"github.com/Rhymond/go-money"
 	"github.com/google/uuid"
@@ -37,4 +38,18 @@ func (p *Purchase) validateAndEnrich() error {
 	p.timeOfPurchase = time.Now()
 
 	return nil
+}
+
+type CardChargeService interface {
+	ChargeCard(ctx context.Context, amount money.Money, cardToken string) error
+}
+
+type StoreService interface {
+	GetStoreSpecificDiscount(ctx context.Context, storeID uuid.UUID) (float32, error)
+}
+
+type Service struct {
+	cardService  CardChargeService
+	purchaseRepo Repository
+	storeService StoreService
 }

@@ -3,6 +3,7 @@ package purchase
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/Rhymond/go-money"
 	"github.com/google/uuid"
 	"github.com/mamalmaleki/coffeego"
@@ -52,4 +53,16 @@ type Service struct {
 	cardService  CardChargeService
 	purchaseRepo Repository
 	storeService StoreService
+}
+
+func NewService(cardService CardChargeService, purchaseRepo Repository, storeService StoreService) *Service {
+	return &Service{cardService: cardService, purchaseRepo: purchaseRepo, storeService: storeService}
+}
+
+func (s *Service) calculateStoreSpecificDiscount(ctx context.Context,
+	storeID uuid.UUID, purchase *Purchase) error {
+	discount, err := s.storeService.GetStoreSpecificDiscount(ctx, storeID)
+	if err != nil && err != store.ErrNoDiscount {
+		return fmt.Errorf("failed to get discount: %w", err)
+	}
 }

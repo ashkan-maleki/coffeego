@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"github.com/Rhymond/go-money"
 	"github.com/google/uuid"
-	"github.com/mamalmaleki/coffeego"
+	"github.com/mamalmaleki/coffeego/internal"
+	"github.com/mamalmaleki/coffeego/internal/loyalty"
 	"github.com/mamalmaleki/coffeego/internal/payment"
 	"github.com/mamalmaleki/coffeego/internal/store"
 	"time"
@@ -59,10 +60,52 @@ func NewService(cardService CardChargeService, purchaseRepo Repository, storeSer
 	return &Service{cardService: cardService, purchaseRepo: purchaseRepo, storeService: storeService}
 }
 
+func (s *Service) CompletePurchase(ctx context.Context, storeID uuid.UUID,
+	purchase *Purchase, coffeeBuxCard *loyalty.CoffeeBux) error {
+	if err := purchase.validateAndEnrich(); err != nil {
+		return nil
+	}
+
+	if err := s.calculateStoreSpecificDiscount(ctx, storeID, purchase); err != nil {
+		return err
+	}
+
+	switch purchase.PaymentMeans {
+	case payment.MeansCard:
+		if err := s.cardService.ChargeCard(ctx, purchase.total, *purchase.CardToken); err != nil {
+			return errors.New("card charge failed, cancelling purchase")
+		}
+	case payment.MeansCash:
+	// TODO: it should be added in the future :)
+	case payment.MeansCoffeeBux:
+		if err := coffeeBuxCard.Pay(ctx, purchase.ProductsToPurchase); err != nil {
+			return fmt.Errorf("failed to charge loyalty card: %w", err)
+		}
+	default:
+		return errors.New("unknown payment type")
+	}
+
+	if err := s.purchaseRepo.Store(ctx, *purchase); err != nil {
+		return errors.New("failed to store purchase")
+	}
+
+	if coffeeBuxCard != nil {
+		coffeeBuxCard.AddStamp()
+	}
+
+	return nil
+}
+
 func (s *Service) calculateStoreSpecificDiscount(ctx context.Context,
 	storeID uuid.UUID, purchase *Purchase) error {
 	discount, err := s.storeService.GetStoreSpecificDiscount(ctx, storeID)
 	if err != nil && err != store.ErrNoDiscount {
 		return fmt.Errorf("failed to get discount: %w", err)
 	}
+
+	purchasePrice := purchase.total
+	if discount > 0 {
+		purchase.total = *purchasePrice.Multiply(int64(100 - discount))
+	}
+	return nil
 }

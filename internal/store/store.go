@@ -2,7 +2,7 @@ package store
 
 import (
 	"github.com/google/uuid"
-	"github.com/mamalmaleki/coffeego"
+	"github.com/mamalmaleki/coffeego/internal"
 )
 
 type Store struct {
